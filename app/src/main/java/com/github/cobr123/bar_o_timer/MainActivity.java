@@ -42,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
                 .setAutoCancel(false)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
+                //.addAction(R.drawable.ic_baseline_more_time_24, "5s", getNewTimeAction("5s", Duration.ofSeconds(5).getSeconds()))
                 .addAction(R.drawable.ic_baseline_more_time_24, "5m", getNewTimeAction("5m", Duration.ofMinutes(5).getSeconds()))
                 .addAction(R.drawable.ic_baseline_more_time_24, "25m", getNewTimeAction("25m", Duration.ofMinutes(25).getSeconds()))
                 .addAction(R.drawable.ic_baseline_more_time_24, "45m", getNewTimeAction("45m", Duration.ofMinutes(45).getSeconds()))
