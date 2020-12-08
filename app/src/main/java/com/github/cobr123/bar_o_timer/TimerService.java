@@ -1,10 +1,12 @@
 package com.github.cobr123.bar_o_timer;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Build;
@@ -57,6 +59,7 @@ public class TimerService extends Service {
 
     private final Map<Integer, CountDownTimer> timers = new ConcurrentHashMap<>();
     private final Map<Integer, MediaPlayer> alerts = new ConcurrentHashMap<>();
+    private final Map<Integer, PendingIntent> alarms = new ConcurrentHashMap<>();
 
     private void stopAlert(final int id) {
         if (alerts.containsKey(id)) {
@@ -72,18 +75,67 @@ public class TimerService extends Service {
         }
     }
 
+    private void cancelAlarm(final int id) {
+        if (alarms.containsKey(id)) {
+            getAlarmManager().cancel(alarms.get(id));
+        }
+    }
+
+    private AlarmManager getAlarmManager() {
+        return (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+    }
+
+    private NotificationCompat.Builder getNotificationBuilder(final int id) {
+        final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
+        stopIntent.setAction("STOP_DURATION_TIMER");
+        stopIntent.putExtra("ID", id);
+
+        return new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_baseline_timer_24)
+                .setAutoCancel(false)
+                .setOngoing(true)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+    }
+
+    private void finishTimer(final int id) {
+        final Intent deleteIntent = new Intent(TimerService.this, TimerService.class);
+        deleteIntent.setAction("STOP_ALERT");
+        deleteIntent.putExtra("ID", id);
+
+        final NotificationCompat.Builder builder = getNotificationBuilder(id)
+                .setContentText("Time!")
+                .setProgress(0, 0, false)
+                .setAutoCancel(true)
+                .setOngoing(false)
+                .setDeleteIntent(PendingIntent.getService(TimerService.this, id, deleteIntent, 0));
+
+        NotificationManagerCompat.from(TimerService.this)
+                .notify(id, builder.build());
+
+        final MediaPlayer player = MediaPlayer.create(TimerService.this, Settings.System.DEFAULT_ALARM_ALERT_URI);
+        player.start();
+        alerts.put(id, player);
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand " + intent.getAction());
         if (intent != null) {
-            if ("STOP_ALERT".equals(intent.getAction())) {
+            if ("FINISH_DURATION_TIMER".equals(intent.getAction())) {
+                final int id = intent.getIntExtra("ID", -1);
+                finishTimer(id);
+            } else if ("STOP_ALERT".equals(intent.getAction())) {
                 final int id = intent.getIntExtra("ID", -1);
                 stopAlert(id);
                 cancelTimer(id);
+                cancelAlarm(id);
             } else if ("STOP_DURATION_TIMER".equals(intent.getAction())) {
                 final int id = intent.getIntExtra("ID", -1);
                 stopAlert(id);
                 cancelTimer(id);
+                cancelAlarm(id);
                 NotificationManagerCompat.from(TimerService.this)
                         .cancel(id);
             } else if ("START_DURATION_TIMER".equals(intent.getAction())) {
@@ -93,21 +145,17 @@ public class TimerService extends Service {
                 Log.d(TAG, "duration_millis = " + duration_millis + ", id = " + id + ", title = " + title);
                 final long when_to_stop = System.currentTimeMillis() + duration_millis;
 
-                final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
-                stopIntent.setAction("STOP_DURATION_TIMER");
-                stopIntent.putExtra("ID", id);
-
-                final NotificationCompat.Builder builder = new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_baseline_timer_24)
-                        .setAutoCancel(false)
-                        .setOngoing(true)
+                final NotificationCompat.Builder builder = getNotificationBuilder(id)
                         .setContentTitle(title)
-                        .setVisibility(Notification.VISIBILITY_PUBLIC)
-                        .setWhen(when_to_stop)
-                        .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
-                        .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                        .setWhen(when_to_stop);
 
-                alerts.put(id, MediaPlayer.create(TimerService.this, Settings.System.DEFAULT_ALARM_ALERT_URI));
+                final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
+                finishIntent.setAction("FINISH_DURATION_TIMER");
+                finishIntent.putExtra("ID", id);
+
+                final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, id, finishIntent, 0);
+                alarms.put(id, finishPendingIntent);
+                getAlarmManager().setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when_to_stop, finishPendingIntent);
 
                 timers.put(id, new CountDownTimer(duration_millis, 1000) {
 
@@ -128,18 +176,7 @@ public class TimerService extends Service {
                     }
 
                     public void onFinish() {
-                        final Intent deleteIntent = new Intent(TimerService.this, TimerService.class);
-                        deleteIntent.setAction("STOP_ALERT");
-                        deleteIntent.putExtra("ID", id);
-
-                        builder.setContentText("Time!")
-                                .setProgress(0, 0, false)
-                                .setAutoCancel(true)
-                                .setOngoing(false)
-                                .setDeleteIntent(PendingIntent.getService(TimerService.this, id, deleteIntent, 0));
-                        NotificationManagerCompat.from(TimerService.this)
-                                .notify(id, builder.build());
-                        alerts.get(id).start();
+                        finishTimer(id);
                     }
                 }.start());
 
