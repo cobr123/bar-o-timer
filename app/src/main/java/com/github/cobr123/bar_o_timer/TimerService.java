@@ -78,6 +78,7 @@ public class TimerService extends Service {
     private void cancelAlarm(final int id) {
         if (alarms.containsKey(id)) {
             getAlarmManager().cancel(alarms.get(id));
+            alarms.remove(id);
         }
     }
 
