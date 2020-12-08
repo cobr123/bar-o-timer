@@ -1,37 +1,26 @@
 package com.github.cobr123.bar_o_timer;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
+import android.os.CountDownTimer;
 import android.os.IBinder;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-import java.text.SimpleDateFormat;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
-import java.util.Date;
-import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class TimerService extends Service {
 
     private final String TAG = getClass().getSimpleName();
     private final String CHANNEL_ID = getClass().getCanonicalName();
-    private long startTime;
-    private Intent stopIntent;
-    private ScheduledExecutorService scheduledExecutorService;
 
     public TimerService() {
     }
@@ -54,55 +43,69 @@ public class TimerService extends Service {
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);
         }
-        stopIntent = new Intent(TimerService.this, TimerService.class);
-        stopIntent.setAction("STOP_DURATION_TIMER");
-        scheduledExecutorService = Executors.newScheduledThreadPool(3);
     }
+
+    private int nextId = 1000;
+
+    private int genId() {
+        final int id = nextId;
+        nextId += 1;
+        return id;
+    }
+
+    private final Map<Integer, CountDownTimer> timers = new ConcurrentHashMap<>();
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand");
+        Log.d(TAG, "onStartCommand " + intent.getAction());
         if (intent != null) {
             if ("STOP_DURATION_TIMER".equals(intent.getAction())) {
-                scheduledExecutorService.shutdown();
-                stopForeground(true);
+                final int id = intent.getIntExtra("ID", -1);
+                if (timers.containsKey(id)) {
+                    timers.get(id).cancel();
+                    timers.remove(id);
+                }
+                NotificationManagerCompat.from(TimerService.this)
+                        .cancel(id);
             } else if ("START_DURATION_TIMER".equals(intent.getAction())) {
-                scheduledExecutorService.shutdown();
-                scheduledExecutorService = Executors.newScheduledThreadPool(1);
+                final int id = genId();
                 final long duration_millis = intent.getLongExtra("DURATION", 0) * 1000;
-                final int id = intent.getIntExtra("ID", 1);
-                Log.d(TAG, "duration_millis = " + duration_millis + ", id = " + id);
-                startTime = System.currentTimeMillis();
+                final String title = intent.getStringExtra("TITLE");
+                Log.d(TAG, "duration_millis = " + duration_millis + ", id = " + id + ", title = " + title);
+                final long when_to_stop = System.currentTimeMillis() + duration_millis;
 
-                scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-                    @Override
-                    public void run() {
-                        final long elapsed_millis = System.currentTimeMillis() - startTime;
-                        final long remain_millis = duration_millis - elapsed_millis;
-                        Log.d(TAG, "remain_millis = " + remain_millis);
-                        if (remain_millis <= 0) {
-                            scheduledExecutorService.shutdown();
-                            stopForeground(true);
-                            return;
-                        }
-                        int seconds = (int) (remain_millis / 1000);
-                        int minutes = seconds / 60;
-                        int hours = minutes / 60;
-                        seconds = seconds % 60;
-                        minutes = minutes % 60;
+                final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
+                stopIntent.setAction("STOP_DURATION_TIMER");
+                stopIntent.putExtra("ID", id);
 
-                        final NotificationCompat.Builder builder = new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
-                                .setSmallIcon(R.drawable.ic_baseline_timer_24)
-                                .setContentTitle(String.format("%02d:%02d:%02d", hours, minutes, seconds))
-                                .setAutoCancel(false)
-                                .setOngoing(true)
-                                .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
-                                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                final NotificationCompat.Builder builder = new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_baseline_timer_24)
+                        .setAutoCancel(false)
+                        .setOngoing(true)
+                        .setContentTitle(title)
+                        .setVisibility(Notification.VISIBILITY_PUBLIC)
+                        .setWhen(when_to_stop)
+                        .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
+                timers.put(id, new CountDownTimer(duration_millis, 1000) {
+
+                    public void onTick(long millisUntilFinished) {
+                        builder.setContentText("seconds remaining: " + millisUntilFinished / 1000);
                         NotificationManagerCompat.from(TimerService.this)
                                 .notify(id, builder.build());
                     }
-                }, 0, 1000, TimeUnit.MILLISECONDS);
+
+                    public void onFinish() {
+                        builder.setContentText("Time!");
+                        NotificationManagerCompat.from(TimerService.this)
+                                .notify(id, builder.build());
+                    }
+                }.start());
+
+
+                NotificationManagerCompat.from(TimerService.this)
+                        .notify(id, builder.build());
             }
         }
         return START_STICKY;

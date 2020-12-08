@@ -1,5 +1,6 @@
 package com.github.cobr123.bar_o_timer;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -7,15 +8,9 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.snackbar.Snackbar;
-
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-
-import android.view.View;
 
 import android.view.Menu;
 import android.view.MenuItem;
@@ -25,7 +20,6 @@ import java.time.Duration;
 public class MainActivity extends AppCompatActivity {
 
     private final String CHANNEL_ID = getClass().getCanonicalName();
-    private final int barNotificationId = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,20 +41,32 @@ public class MainActivity extends AppCompatActivity {
                 .setSmallIcon(R.drawable.ic_baseline_timer_24)
                 .setAutoCancel(false)
                 .setOngoing(true)
-                .addAction(R.drawable.ic_baseline_more_time_24, "5m", getNewTimeAction(1, Duration.ofMinutes(5).getSeconds()))
-                .addAction(R.drawable.ic_baseline_more_time_24, "15m", getNewTimeAction(2, Duration.ofMinutes(15).getSeconds()))
-                .addAction(R.drawable.ic_baseline_more_time_24, "25m", getNewTimeAction(3, Duration.ofMinutes(25).getSeconds()))
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .addAction(R.drawable.ic_baseline_more_time_24, "10s", getNewTimeAction("10s", Duration.ofSeconds(10).getSeconds()))
+                .addAction(R.drawable.ic_baseline_more_time_24, "5m", getNewTimeAction("5m", Duration.ofMinutes(5).getSeconds()))
+                //.addAction(R.drawable.ic_baseline_more_time_24, "15m", getNewTimeAction(2, Duration.ofMinutes(15).getSeconds()))
+                //.addAction(R.drawable.ic_baseline_more_time_24, "25m", getNewTimeAction(3, Duration.ofMinutes(25).getSeconds()))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
         NotificationManagerCompat.from(MainActivity.this)
-                .notify(barNotificationId, builder.build());
+                .notify(genId(), builder.build());
     }
 
-    private PendingIntent getNewTimeAction(final int id, final long seconds) {
+    private int nextId = 0;
+
+    private int genId() {
+        final int id = nextId;
+        nextId += 1;
+        return id;
+    }
+
+    private PendingIntent getNewTimeAction(final String title, final long seconds) {
+        final int id = genId();
         final Intent intent = new Intent(MainActivity.this, TimerService.class);
         intent.setAction("START_DURATION_TIMER");
         intent.putExtra("DURATION", seconds);
         intent.putExtra("ID", id);
+        intent.putExtra("TITLE", title);
         return PendingIntent.getService(MainActivity.this, id, intent, 0);
     }
 
