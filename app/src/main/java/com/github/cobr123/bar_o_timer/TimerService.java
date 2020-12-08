@@ -58,23 +58,32 @@ public class TimerService extends Service {
     private final Map<Integer, CountDownTimer> timers = new ConcurrentHashMap<>();
     private final Map<Integer, MediaPlayer> alerts = new ConcurrentHashMap<>();
 
+    private void stopAlert(final int id) {
+        if (alerts.containsKey(id)) {
+            alerts.get(id).stop();
+            alerts.remove(id);
+        }
+    }
+
+    private void cancelTimer(final int id) {
+        if (timers.containsKey(id)) {
+            timers.get(id).cancel();
+            timers.remove(id);
+        }
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand " + intent.getAction());
         if (intent != null) {
             if ("STOP_ALERT".equals(intent.getAction())) {
                 final int id = intent.getIntExtra("ID", -1);
-                if (alerts.containsKey(id)) {
-                    alerts.get(id).stop();
-                    alerts.remove(id);
-                }
+                stopAlert(id);
+                cancelTimer(id);
             } else if ("STOP_DURATION_TIMER".equals(intent.getAction())) {
                 final int id = intent.getIntExtra("ID", -1);
-                if (timers.containsKey(id)) {
-                    timers.get(id).cancel();
-                    timers.remove(id);
-                }
-                alerts.remove(id);
+                stopAlert(id);
+                cancelTimer(id);
                 NotificationManagerCompat.from(TimerService.this)
                         .cancel(id);
             } else if ("START_DURATION_TIMER".equals(intent.getAction())) {
