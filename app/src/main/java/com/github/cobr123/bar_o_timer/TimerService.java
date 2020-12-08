@@ -134,6 +134,7 @@ public class TimerService extends Service {
 
                         builder.setContentText("Time!")
                                 .setProgress(0, 0, false)
+                                .setAutoCancel(true)
                                 .setOngoing(false)
                                 .setDeleteIntent(PendingIntent.getService(TimerService.this, id, deleteIntent, 0));
                         NotificationManagerCompat.from(TimerService.this)
