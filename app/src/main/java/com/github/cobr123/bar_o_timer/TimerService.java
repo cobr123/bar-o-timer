@@ -88,16 +88,29 @@ public class TimerService extends Service {
                         .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
+
                 timers.put(id, new CountDownTimer(duration_millis, 1000) {
 
+                    int PROGRESS_MAX = 100;
+                    int PROGRESS_CURRENT = 0;
+
                     public void onTick(long millisUntilFinished) {
-                        builder.setContentText("seconds remaining: " + millisUntilFinished / 1000);
+                        int seconds = (int) (millisUntilFinished / 1000);
+                        int minutes = seconds / 60;
+                        int hours = minutes / 60;
+                        minutes = minutes % 60;
+                        seconds = seconds % 60;
+                        PROGRESS_CURRENT = (int) ((double) millisUntilFinished / (double) duration_millis * 100.0);
+                        builder.setContentText(String.format("%02d:%02d:%02d", hours, minutes, seconds))
+                                .setProgress(PROGRESS_MAX, PROGRESS_CURRENT, false);
                         NotificationManagerCompat.from(TimerService.this)
                                 .notify(id, builder.build());
                     }
 
                     public void onFinish() {
-                        builder.setContentText("Time!");
+                        builder.setContentText("Time!")
+                                .setProgress(0, 0, false)
+                                .setOngoing(false);
                         NotificationManagerCompat.from(TimerService.this)
                                 .notify(id, builder.build());
                     }
