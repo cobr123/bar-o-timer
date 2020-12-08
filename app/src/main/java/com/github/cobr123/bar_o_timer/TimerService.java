@@ -2,6 +2,7 @@ package com.github.cobr123.bar_o_timer;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
@@ -28,6 +29,9 @@ public class TimerService extends Service {
 
     private final String TAG = getClass().getSimpleName();
     private final String CHANNEL_ID = getClass().getCanonicalName();
+    private long startTime;
+    private Intent stopIntent;
+    private ScheduledExecutorService scheduledExecutorService;
 
     public TimerService() {
     }
@@ -50,50 +54,56 @@ public class TimerService extends Service {
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);
         }
+        stopIntent = new Intent(TimerService.this, TimerService.class);
+        stopIntent.setAction("STOP_DURATION_TIMER");
+        scheduledExecutorService = Executors.newScheduledThreadPool(3);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand");
         if (intent != null) {
-            final ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
-            final long duration_seconds = intent.getLongExtra("DURATION", 0);
-            Log.d(TAG, "duration_seconds = " + duration_seconds);
-            final int id = intent.getIntExtra("ID", 1);
-            final AtomicLong elapsed_seconds = new AtomicLong(0);
+            if ("STOP_DURATION_TIMER".equals(intent.getAction())) {
+                scheduledExecutorService.shutdown();
+                stopForeground(true);
+            } else if ("START_DURATION_TIMER".equals(intent.getAction())) {
+                scheduledExecutorService.shutdown();
+                scheduledExecutorService = Executors.newScheduledThreadPool(1);
+                final long duration_millis = intent.getLongExtra("DURATION", 0) * 1000;
+                final int id = intent.getIntExtra("ID", 1);
+                Log.d(TAG, "duration_millis = " + duration_millis + ", id = " + id);
+                startTime = System.currentTimeMillis();
 
-             scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-                @Override
-                public void run() {
-                    final long remain_seconds = duration_seconds - elapsed_seconds.getAndIncrement();
-                    Log.d(TAG, "remain_seconds = " + remain_seconds);
-                    if (remain_seconds <= 0) {
-                        scheduledExecutorService.shutdown();
-                        return;
-                    }
-                    final Duration remain = Duration.ofSeconds(remain_seconds);
-                    long hours = 0;
-                    long minutes = 0;
-                    long seconds = 0;
-                    for (TemporalUnit temporalUnit : remain.getUnits()) {
-                        if (temporalUnit == ChronoUnit.HOURS) {
-                            hours = remain.get(ChronoUnit.HOURS);
-                        } else if (temporalUnit == ChronoUnit.MINUTES) {
-                            minutes = remain.get(ChronoUnit.MINUTES);
-                        } else if (temporalUnit == ChronoUnit.SECONDS) {
-                            seconds = remain.get(ChronoUnit.SECONDS);
+                scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+                    @Override
+                    public void run() {
+                        final long elapsed_millis = System.currentTimeMillis() - startTime;
+                        final long remain_millis = duration_millis - elapsed_millis;
+                        Log.d(TAG, "remain_millis = " + remain_millis);
+                        if (remain_millis <= 0) {
+                            scheduledExecutorService.shutdown();
+                            stopForeground(true);
+                            return;
                         }
-                    }
-                    final NotificationCompat.Builder builder = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
-                            .setSmallIcon(R.drawable.ic_baseline_timer_24)
-                            .setContentTitle(String.format("%02d:%02d:%02d", hours, minutes, seconds))
-                            .setAutoCancel(false)
-                            .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                        int seconds = (int) (remain_millis / 1000);
+                        int minutes = seconds / 60;
+                        int hours = minutes / 60;
+                        seconds = seconds % 60;
+                        minutes = minutes % 60;
 
-                    NotificationManagerCompat.from(getApplicationContext())
-                            .notify(id, builder.build());
-                }
-            }, 0, 1000, TimeUnit.MILLISECONDS);
+                        final NotificationCompat.Builder builder = new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
+                                .setSmallIcon(R.drawable.ic_baseline_timer_24)
+                                .setContentTitle(String.format("%02d:%02d:%02d", hours, minutes, seconds))
+                                .setAutoCancel(false)
+                                .setOngoing(true)
+                                .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, id, stopIntent, 0))
+                                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+
+                        NotificationManagerCompat.from(TimerService.this)
+                                .notify(id, builder.build());
+                    }
+                }, 0, 1000, TimeUnit.MILLISECONDS);
+            }
         }
         return START_STICKY;
     }
