@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
 
@@ -103,7 +104,7 @@ public class TimerService extends Service {
                 .setContentText("Time!")
                 .setAutoCancel(true)
                 .setOngoing(false)
-                .setDeleteIntent(PendingIntent.getService(TimerService.this, 0, deleteIntent, 0))
+                .setDeleteIntent(PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), deleteIntent, 0))
                 .setPriority(NotificationCompat.PRIORITY_MAX);
 
         NotificationManagerCompat.from(TimerService.this)
@@ -145,14 +146,14 @@ public class TimerService extends Service {
                         .setContentTitle(title)
                         .setUsesChronometer(true)
                         .setWhen(when_to_stop)
-                        .addAction(R.drawable.ic_baseline_timer_off_24, "Cancel", PendingIntent.getService(TimerService.this, 0, stopIntent, 0));
+                        .addAction(R.drawable.ic_baseline_timer_off_24, "Cancel", PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), stopIntent, 0));
 
                 final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
                 finishIntent.setAction(FINISH_DURATION_TIMER);
                 finishIntent.putExtra(NOTIFY_TAG, notify_tag);
                 finishIntent.putExtra(TITLE, title);
 
-                final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, 0, finishIntent, 0);
+                final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), finishIntent, 0);
                 alarms.put(notify_tag, finishPendingIntent);
                 getAlarmManager().setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when_to_stop, finishPendingIntent);
 
