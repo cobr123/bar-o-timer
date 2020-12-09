@@ -10,7 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Build;
-import android.os.CountDownTimer;
 import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
@@ -23,13 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TimerService extends Service {
 
-    public static final String DURATION = "DURATION";
+    public static final String DURATION_SECONDS = "DURATION_SECONDS";
     public static final String TITLE = "TITLE";
     public static final String NOTIFY_TAG = "NOTIFY_TAG";
+
     public static final String START_DURATION_TIMER = "START_DURATION_TIMER";
     public static final String FINISH_DURATION_TIMER = "FINISH_DURATION_TIMER";
-    public static final String STOP_DURATION_TIMER = "STOP_DURATION_TIMER";
-    public static final String STOP_ALERT = "STOP_ALERT";
+    public static final String CANCEL_DURATION_TIMER = "CANCEL_DURATION_TIMER";
 
     private final String TAG = getClass().getSimpleName();
     private final String CHANNEL_ID = getClass().getCanonicalName();
@@ -84,33 +83,28 @@ public class TimerService extends Service {
         return (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
     }
 
-    private NotificationCompat.Builder getNotificationBuilder(final String notify_tag) {
-        final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
-        stopIntent.setAction(STOP_DURATION_TIMER);
-        stopIntent.putExtra(NOTIFY_TAG, notify_tag);
-
+    private NotificationCompat.Builder getNotificationBuilder() {
         return new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_baseline_timer_24)
                 .setAutoCancel(false)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .addAction(R.drawable.ic_baseline_timer_off_24, "Stop", PendingIntent.getService(TimerService.this, 0, stopIntent, 0))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
     }
 
     private void finishTimer(final String notify_tag, final String title) {
         final Intent deleteIntent = new Intent(TimerService.this, TimerService.class);
-        deleteIntent.setAction(STOP_ALERT);
+        deleteIntent.setAction(CANCEL_DURATION_TIMER);
         deleteIntent.putExtra(NOTIFY_TAG, notify_tag);
 
-        final NotificationCompat.Builder builder = getNotificationBuilder(notify_tag)
+        final NotificationCompat.Builder builder = getNotificationBuilder()
                 .setSmallIcon(R.drawable.ic_baseline_timer_off_24)
                 .setContentTitle(title)
                 .setContentText("Time!")
-                .setProgress(0, 0, false)
                 .setAutoCancel(true)
                 .setOngoing(false)
-                .setDeleteIntent(PendingIntent.getService(TimerService.this, 0, deleteIntent, 0));
+                .setDeleteIntent(PendingIntent.getService(TimerService.this, 0, deleteIntent, 0))
+                .setPriority(NotificationCompat.PRIORITY_MAX);
 
         NotificationManagerCompat.from(TimerService.this)
                 .notify(notify_tag, 0, builder.build());
@@ -127,28 +121,31 @@ public class TimerService extends Service {
             if (FINISH_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 final String title = intent.getStringExtra(TITLE);
+                Log.d(TAG, "FINISH_DURATION_TIMER, notify_tag = " + notify_tag + ", title = " + title);
                 finishTimer(notify_tag, title);
-            } else if (STOP_ALERT.equals(intent.getAction())) {
+            } else if (CANCEL_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 stopAlert(notify_tag);
                 cancelAlarm(notify_tag);
-            } else if (STOP_DURATION_TIMER.equals(intent.getAction())) {
-                final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
-                stopAlert(notify_tag);
-                cancelAlarm(notify_tag);
+                Log.d(TAG, "CANCEL_DURATION_TIMER, notify_tag = " + notify_tag);
                 NotificationManagerCompat.from(TimerService.this)
                         .cancel(notify_tag, 0);
             } else if (START_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = String.valueOf(System.currentTimeMillis());
-                final long duration_millis = intent.getLongExtra(DURATION, 0) * 1000;
+                final long duration_millis = intent.getLongExtra(DURATION_SECONDS, 0) * 1000;
                 final String title = intent.getStringExtra(TITLE);
                 Log.d(TAG, "duration_millis = " + duration_millis + ", notify_tag = " + notify_tag + ", title = " + title);
                 final long when_to_stop = System.currentTimeMillis() + duration_millis;
 
-                final NotificationCompat.Builder builder = getNotificationBuilder(notify_tag)
+                final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
+                stopIntent.setAction(CANCEL_DURATION_TIMER);
+                stopIntent.putExtra(NOTIFY_TAG, notify_tag);
+
+                final NotificationCompat.Builder builder = getNotificationBuilder()
                         .setContentTitle(title)
                         .setUsesChronometer(true)
-                        .setWhen(when_to_stop);
+                        .setWhen(when_to_stop)
+                        .addAction(R.drawable.ic_baseline_timer_off_24, "Cancel", PendingIntent.getService(TimerService.this, 0, stopIntent, 0));
 
                 final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
                 finishIntent.setAction(FINISH_DURATION_TIMER);

@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private PendingIntent getNewTimeAction(final String title, final long seconds) {
         final Intent intent = new Intent(MainActivity.this, TimerService.class);
         intent.setAction(TimerService.START_DURATION_TIMER);
-        intent.putExtra(TimerService.DURATION, seconds);
+        intent.putExtra(TimerService.DURATION_SECONDS, seconds);
         intent.putExtra(TimerService.TITLE, title);
         return PendingIntent.getService(MainActivity.this, 0, intent, 0);
     }
