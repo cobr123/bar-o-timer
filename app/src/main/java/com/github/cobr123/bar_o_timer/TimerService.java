@@ -72,7 +72,6 @@ public class TimerService extends Service {
 
     private void cancelAlarm(final String notify_tag) {
         if (alarms.containsKey(notify_tag)) {
-            getAlarmManager().cancel(alarms.get(notify_tag));
             final PendingIntent alarm = alarms.get(notify_tag);
             if (alarm != null) {
                 getAlarmManager().cancel(alarm);
