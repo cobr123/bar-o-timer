@@ -37,27 +37,31 @@ public class MainActivity extends AppCompatActivity {
             notificationManager.createNotificationChannel(channel);
         }
 
+        final PendingIntent pendingIntent5m = PendingIntent.getService(MainActivity.this, 1, getNewTimeIntent("5m", Duration.ofMinutes(5).getSeconds()), 0);
+        final PendingIntent pendingIntent25m = PendingIntent.getService(MainActivity.this, 2, getNewTimeIntent("25m", Duration.ofMinutes(25).getSeconds()), 0);
+        final PendingIntent pendingIntent45m = PendingIntent.getService(MainActivity.this, 3, getNewTimeIntent("45m", Duration.ofMinutes(45).getSeconds()), 0);
+
         final NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_baseline_timer_24)
                 .setAutoCancel(false)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 //.addAction(R.drawable.ic_baseline_more_time_24, "15s", getNewTimeAction("15s", Duration.ofSeconds(15).getSeconds()))
-                .addAction(R.drawable.ic_baseline_more_time_24, "5m", getNewTimeAction("5m", Duration.ofMinutes(5).getSeconds()))
-                .addAction(R.drawable.ic_baseline_more_time_24, "25m", getNewTimeAction("25m", Duration.ofMinutes(25).getSeconds()))
-                .addAction(R.drawable.ic_baseline_more_time_24, "45m", getNewTimeAction("45m", Duration.ofMinutes(45).getSeconds()))
+                .addAction(R.drawable.ic_baseline_more_time_24, "5m", pendingIntent5m)
+                .addAction(R.drawable.ic_baseline_more_time_24, "25m", pendingIntent25m)
+                .addAction(R.drawable.ic_baseline_more_time_24, "45m", pendingIntent45m)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
         NotificationManagerCompat.from(MainActivity.this)
                 .notify(0, builder.build());
     }
 
-    private PendingIntent getNewTimeAction(final String title, final long seconds) {
+    private Intent getNewTimeIntent(final String title, final long seconds) {
         final Intent intent = new Intent(MainActivity.this, TimerService.class);
         intent.setAction(TimerService.START_DURATION_TIMER);
         intent.putExtra(TimerService.DURATION_SECONDS, seconds);
         intent.putExtra(TimerService.TITLE, title);
-        return PendingIntent.getService(MainActivity.this, 0, intent, 0);
+        return intent;
     }
 
     @Override
