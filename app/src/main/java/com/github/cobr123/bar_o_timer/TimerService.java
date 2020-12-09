@@ -63,14 +63,20 @@ public class TimerService extends Service {
 
     private void stopAlert(final String notify_tag) {
         if (alerts.containsKey(notify_tag)) {
-            alerts.get(notify_tag).stop();
+            final MediaPlayer player = alerts.get(notify_tag);
+            if (player != null) {
+                player.stop();
+            }
             alerts.remove(notify_tag);
         }
     }
 
     private void cancelTimer(final String notify_tag) {
         if (timers.containsKey(notify_tag)) {
-            timers.get(notify_tag).cancel();
+            final CountDownTimer timer = timers.get(notify_tag);
+            if (timer != null) {
+                timer.cancel();
+            }
             timers.remove(notify_tag);
         }
     }
@@ -78,6 +84,10 @@ public class TimerService extends Service {
     private void cancelAlarm(final String notify_tag) {
         if (alarms.containsKey(notify_tag)) {
             getAlarmManager().cancel(alarms.get(notify_tag));
+            final PendingIntent alarm = alarms.get(notify_tag);
+            if (alarm != null) {
+                getAlarmManager().cancel(alarm);
+            }
             alarms.remove(notify_tag);
         }
     }
@@ -100,12 +110,13 @@ public class TimerService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
     }
 
-    private void finishTimer(final String notify_tag) {
+    private void finishTimer(final String notify_tag, final String title) {
         final Intent deleteIntent = new Intent(TimerService.this, TimerService.class);
         deleteIntent.setAction(STOP_ALERT);
         deleteIntent.putExtra(NOTIFY_TAG, notify_tag);
 
         final NotificationCompat.Builder builder = getNotificationBuilder(notify_tag)
+                .setContentTitle(title)
                 .setContentText("Time!")
                 .setProgress(0, 0, false)
                 .setAutoCancel(true)
@@ -126,7 +137,8 @@ public class TimerService extends Service {
             Log.d(TAG, "onStartCommand " + intent.getAction());
             if (FINISH_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
-                finishTimer(notify_tag);
+                final String title = intent.getStringExtra(TITLE);
+                finishTimer(notify_tag, title);
             } else if (STOP_ALERT.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 stopAlert(notify_tag);
@@ -153,6 +165,7 @@ public class TimerService extends Service {
                 final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
                 finishIntent.setAction(FINISH_DURATION_TIMER);
                 finishIntent.putExtra(NOTIFY_TAG, notify_tag);
+                finishIntent.putExtra(TITLE, title);
 
                 final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, 0, finishIntent, 0);
                 alarms.put(notify_tag, finishPendingIntent);
@@ -174,10 +187,11 @@ public class TimerService extends Service {
                                 .setProgress(PROGRESS_MAX, PROGRESS_CURRENT, false);
                         NotificationManagerCompat.from(TimerService.this)
                                 .notify(notify_tag, 0, builder.build());
+                        Log.d(TAG, "remain_millis = " + millisUntilFinished + ", notify_tag = " + notify_tag + ", title = " + title);
                     }
 
                     public void onFinish() {
-                        finishTimer(notify_tag);
+                        finishTimer(notify_tag, title);
                     }
                 }.start());
 
