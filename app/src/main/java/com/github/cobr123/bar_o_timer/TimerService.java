@@ -122,8 +122,8 @@ public class TimerService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand " + intent.getAction());
         if (intent != null) {
+            Log.d(TAG, "onStartCommand " + intent.getAction());
             if (FINISH_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 finishTimer(notify_tag);
