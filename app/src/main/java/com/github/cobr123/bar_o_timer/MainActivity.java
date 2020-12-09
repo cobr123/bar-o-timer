@@ -49,25 +49,15 @@ public class MainActivity extends AppCompatActivity {
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
         NotificationManagerCompat.from(MainActivity.this)
-                .notify(genId(), builder.build());
-    }
-
-    private int nextId = 0;
-
-    private int genId() {
-        final int id = nextId;
-        nextId += 1;
-        return id;
+                .notify(0, builder.build());
     }
 
     private PendingIntent getNewTimeAction(final String title, final long seconds) {
-        final int id = genId();
         final Intent intent = new Intent(MainActivity.this, TimerService.class);
-        intent.setAction("START_DURATION_TIMER");
-        intent.putExtra("DURATION", seconds);
-        intent.putExtra("ID", id);
-        intent.putExtra("TITLE", title);
-        return PendingIntent.getService(MainActivity.this, id, intent, 0);
+        intent.setAction(TimerService.START_DURATION_TIMER);
+        intent.putExtra(TimerService.DURATION, seconds);
+        intent.putExtra(TimerService.TITLE, title);
+        return PendingIntent.getService(MainActivity.this, 0, intent, 0);
     }
 
     @Override
