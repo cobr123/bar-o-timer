@@ -8,10 +8,13 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.provider.Settings;
 import android.util.Log;
 
@@ -26,6 +29,7 @@ public class TimerService extends Service {
     public static final String DURATION_SECONDS = "DURATION_SECONDS";
     public static final String TITLE = "TITLE";
     public static final String NOTIFY_TAG = "NOTIFY_TAG";
+    public static final String RESUME_MUSIC = "RESUME_MUSIC";
 
     public static final String START_DURATION_TIMER = "START_DURATION_TIMER";
     public static final String FINISH_DURATION_TIMER = "FINISH_DURATION_TIMER";
@@ -58,15 +62,29 @@ public class TimerService extends Service {
     }
 
     private final Map<String, MediaPlayer> alerts = new ConcurrentHashMap<>();
+    private final Map<String, Vibrator> vibrators = new ConcurrentHashMap<>();
     private final Map<String, PendingIntent> alarms = new ConcurrentHashMap<>();
 
-    private void stopAlert(final String notify_tag) {
+    private void stopAlert(final String notify_tag, final boolean resume_music) {
         if (alerts.containsKey(notify_tag)) {
             final MediaPlayer player = alerts.get(notify_tag);
             if (player != null) {
                 player.stop();
             }
             alerts.remove(notify_tag);
+            if (resume_music) {
+                getAudioManager().abandonAudioFocus(null);
+            }
+        }
+    }
+
+    private void stopVibrator(final String notify_tag) {
+        if (vibrators.containsKey(notify_tag)) {
+            final Vibrator vibrator = vibrators.get(notify_tag);
+            if (vibrator != null) {
+                vibrator.cancel();
+            }
+            vibrators.remove(notify_tag);
         }
     }
 
@@ -84,6 +102,14 @@ public class TimerService extends Service {
         return (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
     }
 
+    private AudioManager getAudioManager() {
+        return (AudioManager) getApplicationContext().getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    private Vibrator getVibrator() {
+        return (Vibrator) getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
+    }
+
     private NotificationCompat.Builder getNotificationBuilder() {
         return new NotificationCompat.Builder(TimerService.this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_baseline_timer_24)
@@ -94,9 +120,49 @@ public class TimerService extends Service {
     }
 
     private void finishTimer(final String notify_tag, final String title) {
+        final AudioManager audioManager = getAudioManager();
+        boolean resume_music;
+        boolean can_play;
+        if (audioManager.isMusicActive()) {
+            if (AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)) {
+                can_play = audioManager.getStreamVolume(AudioManager.STREAM_ALARM) > 0;
+                resume_music = can_play;
+            } else {
+                can_play = false;
+                resume_music = false;
+            }
+        } else {
+            resume_music = false;
+            can_play = audioManager.getStreamVolume(AudioManager.STREAM_ALARM) > 0;
+        }
+        switch (audioManager.getRingerMode()) {
+            case AudioManager.RINGER_MODE_SILENT:
+                Log.d(TAG, "Silent mode");
+                can_play = resume_music;
+                break;
+            case AudioManager.RINGER_MODE_VIBRATE:
+                Log.d(TAG, "Vibrate mode");
+                can_play = resume_music;
+                break;
+            case AudioManager.RINGER_MODE_NORMAL:
+                Log.d(TAG, "Normal mode");
+                break;
+        }
+        if (can_play) {
+            final MediaPlayer player = MediaPlayer.create(TimerService.this, Settings.System.DEFAULT_ALARM_ALERT_URI);
+            player.start();
+            alerts.put(notify_tag, player);
+        } else {
+            final Vibrator vibrator = getVibrator();
+            final long[] pattern = {0, 100, 1000, 300};
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 1));
+            vibrators.put(notify_tag, vibrator);
+        }
+
         final Intent deleteIntent = new Intent(TimerService.this, TimerService.class);
         deleteIntent.setAction(CANCEL_DURATION_TIMER);
         deleteIntent.putExtra(NOTIFY_TAG, notify_tag);
+        deleteIntent.putExtra(RESUME_MUSIC, resume_music);
 
         final NotificationCompat.Builder builder = getNotificationBuilder()
                 .setSmallIcon(R.drawable.ic_baseline_timer_off_24)
@@ -109,10 +175,6 @@ public class TimerService extends Service {
 
         NotificationManagerCompat.from(TimerService.this)
                 .notify(notify_tag, 0, builder.build());
-
-        final MediaPlayer player = MediaPlayer.create(TimerService.this, Settings.System.DEFAULT_ALARM_ALERT_URI);
-        player.start();
-        alerts.put(notify_tag, player);
     }
 
     @Override
@@ -126,7 +188,9 @@ public class TimerService extends Service {
                 finishTimer(notify_tag, title);
             } else if (CANCEL_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
-                stopAlert(notify_tag);
+                final boolean resume_music = intent.getBooleanExtra(RESUME_MUSIC, false);
+                stopAlert(notify_tag, resume_music);
+                stopVibrator(notify_tag);
                 cancelAlarm(notify_tag);
                 Log.d(TAG, "CANCEL_DURATION_TIMER, notify_tag = " + notify_tag);
                 NotificationManagerCompat.from(TimerService.this)

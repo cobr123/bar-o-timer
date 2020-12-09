@@ -37,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
             notificationManager.createNotificationChannel(channel);
         }
 
+        //final PendingIntent pendingIntent15s = PendingIntent.getService(MainActivity.this, 4, getNewTimeIntent("15s", Duration.ofSeconds(15).getSeconds()), 0);
         final PendingIntent pendingIntent5m = PendingIntent.getService(MainActivity.this, 1, getNewTimeIntent("5m", Duration.ofMinutes(5).getSeconds()), 0);
         final PendingIntent pendingIntent25m = PendingIntent.getService(MainActivity.this, 2, getNewTimeIntent("25m", Duration.ofMinutes(25).getSeconds()), 0);
         final PendingIntent pendingIntent45m = PendingIntent.getService(MainActivity.this, 3, getNewTimeIntent("45m", Duration.ofMinutes(45).getSeconds()), 0);
@@ -46,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
                 .setAutoCancel(false)
                 .setOngoing(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
-                //.addAction(R.drawable.ic_baseline_more_time_24, "15s", getNewTimeAction("15s", Duration.ofSeconds(15).getSeconds()))
+                //.addAction(R.drawable.ic_baseline_more_time_24, "15s", pendingIntent15s)
                 .addAction(R.drawable.ic_baseline_more_time_24, "5m", pendingIntent5m)
                 .addAction(R.drawable.ic_baseline_more_time_24, "25m", pendingIntent25m)
                 .addAction(R.drawable.ic_baseline_more_time_24, "45m", pendingIntent45m)
