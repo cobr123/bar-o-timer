@@ -57,7 +57,6 @@ public class TimerService extends Service {
         }
     }
 
-    private final Map<String, CountDownTimer> timers = new ConcurrentHashMap<>();
     private final Map<String, MediaPlayer> alerts = new ConcurrentHashMap<>();
     private final Map<String, PendingIntent> alarms = new ConcurrentHashMap<>();
 
@@ -68,16 +67,6 @@ public class TimerService extends Service {
                 player.stop();
             }
             alerts.remove(notify_tag);
-        }
-    }
-
-    private void cancelTimer(final String notify_tag) {
-        if (timers.containsKey(notify_tag)) {
-            final CountDownTimer timer = timers.get(notify_tag);
-            if (timer != null) {
-                timer.cancel();
-            }
-            timers.remove(notify_tag);
         }
     }
 
@@ -142,12 +131,10 @@ public class TimerService extends Service {
             } else if (STOP_ALERT.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 stopAlert(notify_tag);
-                cancelTimer(notify_tag);
                 cancelAlarm(notify_tag);
             } else if (STOP_DURATION_TIMER.equals(intent.getAction())) {
                 final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
                 stopAlert(notify_tag);
-                cancelTimer(notify_tag);
                 cancelAlarm(notify_tag);
                 NotificationManagerCompat.from(TimerService.this)
                         .cancel(notify_tag, 0);
@@ -160,6 +147,7 @@ public class TimerService extends Service {
 
                 final NotificationCompat.Builder builder = getNotificationBuilder(notify_tag)
                         .setContentTitle(title)
+                        .setUsesChronometer(true)
                         .setWhen(when_to_stop);
 
                 final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
@@ -170,31 +158,6 @@ public class TimerService extends Service {
                 final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, 0, finishIntent, 0);
                 alarms.put(notify_tag, finishPendingIntent);
                 getAlarmManager().setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when_to_stop, finishPendingIntent);
-
-                timers.put(notify_tag, new CountDownTimer(duration_millis, 1000) {
-
-                    int PROGRESS_MAX = 100;
-                    int PROGRESS_CURRENT = 0;
-
-                    public void onTick(long millisUntilFinished) {
-                        int seconds = (int) (millisUntilFinished / 1000);
-                        int minutes = seconds / 60;
-                        int hours = minutes / 60;
-                        minutes = minutes % 60;
-                        seconds = seconds % 60;
-                        PROGRESS_CURRENT = (int) ((double) millisUntilFinished / (double) duration_millis * 100.0);
-                        builder.setContentText(String.format("%02d:%02d:%02d", hours, minutes, seconds))
-                                .setProgress(PROGRESS_MAX, PROGRESS_CURRENT, false);
-                        NotificationManagerCompat.from(TimerService.this)
-                                .notify(notify_tag, 0, builder.build());
-                        Log.d(TAG, "remain_millis = " + millisUntilFinished + ", notify_tag = " + notify_tag + ", title = " + title);
-                    }
-
-                    public void onFinish() {
-                        finishTimer(notify_tag, title);
-                    }
-                }.start());
-
 
                 NotificationManagerCompat.from(TimerService.this)
                         .notify(notify_tag, 0, builder.build());
