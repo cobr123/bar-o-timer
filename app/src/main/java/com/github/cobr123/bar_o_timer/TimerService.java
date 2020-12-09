@@ -104,6 +104,7 @@ public class TimerService extends Service {
         deleteIntent.putExtra(NOTIFY_TAG, notify_tag);
 
         final NotificationCompat.Builder builder = getNotificationBuilder(notify_tag)
+                .setSmallIcon(R.drawable.ic_baseline_timer_off_24)
                 .setContentTitle(title)
                 .setContentText("Time!")
                 .setProgress(0, 0, false)
