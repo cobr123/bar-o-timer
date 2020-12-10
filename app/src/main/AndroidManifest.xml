@@ -14,6 +14,7 @@
         android:theme="@style/Theme.Barotimer">
         <service
             android:name=".TimerService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
             android:enabled="true"
             android:exported="false" />
 

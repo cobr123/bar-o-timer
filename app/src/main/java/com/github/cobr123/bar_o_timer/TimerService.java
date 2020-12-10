@@ -5,7 +5,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
@@ -18,13 +17,69 @@ import android.os.Vibrator;
 import android.provider.Settings;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.core.app.JobIntentService;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TimerService extends Service {
+public class TimerService extends JobIntentService {
+
+    public static final int JOB_ID = 1;
+
+    public static void enqueueWork(final Context context, final Intent work) {
+        enqueueWork(context, TimerService.class, JOB_ID, work);
+    }
+
+    @Override
+    protected void onHandleWork(@NonNull Intent intent) {
+        Log.d(TAG, "onStartCommand " + intent.getAction());
+        if (FINISH_DURATION_TIMER.equals(intent.getAction())) {
+            final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
+            final String title = intent.getStringExtra(TITLE);
+            Log.d(TAG, "FINISH_DURATION_TIMER, notify_tag = " + notify_tag + ", title = " + title);
+            finishTimer(notify_tag, title);
+        } else if (CANCEL_DURATION_TIMER.equals(intent.getAction())) {
+            final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
+            final boolean resume_music = intent.getBooleanExtra(RESUME_MUSIC, false);
+            stopAlert(notify_tag, resume_music);
+            stopVibrator(notify_tag);
+            cancelAlarm(notify_tag);
+            Log.d(TAG, "CANCEL_DURATION_TIMER, notify_tag = " + notify_tag);
+            NotificationManagerCompat.from(TimerService.this)
+                    .cancel(notify_tag, 0);
+        } else if (START_DURATION_TIMER.equals(intent.getAction())) {
+            final String notify_tag = String.valueOf(System.currentTimeMillis());
+            final long duration_millis = intent.getLongExtra(DURATION_SECONDS, 0) * 1000;
+            final String title = intent.getStringExtra(TITLE);
+            Log.d(TAG, "duration_millis = " + duration_millis + ", notify_tag = " + notify_tag + ", title = " + title);
+            final long when_to_stop = System.currentTimeMillis() + duration_millis;
+
+            final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
+            stopIntent.setAction(CANCEL_DURATION_TIMER);
+            stopIntent.putExtra(NOTIFY_TAG, notify_tag);
+
+            final NotificationCompat.Builder builder = getNotificationBuilder()
+                    .setContentTitle(title)
+                    .setUsesChronometer(true)
+                    .setWhen(when_to_stop)
+                    .addAction(R.drawable.ic_baseline_timer_off_24, "Cancel", PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), stopIntent, 0));
+
+            final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
+            finishIntent.setAction(FINISH_DURATION_TIMER);
+            finishIntent.putExtra(NOTIFY_TAG, notify_tag);
+            finishIntent.putExtra(TITLE, title);
+
+            final PendingIntent finishPendingIntent = PendingIntent.getForegroundService(TimerService.this, (int) SystemClock.uptimeMillis(), finishIntent, 0);
+            alarms.put(notify_tag, finishPendingIntent);
+            getAlarmManager().setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when_to_stop, finishPendingIntent);
+
+            NotificationManagerCompat.from(TimerService.this)
+                    .notify(notify_tag, 0, builder.build());
+        }
+    }
 
     public static final String DURATION_SECONDS = "DURATION_SECONDS";
     public static final String TITLE = "TITLE";
@@ -180,50 +235,7 @@ public class TimerService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
-            Log.d(TAG, "onStartCommand " + intent.getAction());
-            if (FINISH_DURATION_TIMER.equals(intent.getAction())) {
-                final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
-                final String title = intent.getStringExtra(TITLE);
-                Log.d(TAG, "FINISH_DURATION_TIMER, notify_tag = " + notify_tag + ", title = " + title);
-                finishTimer(notify_tag, title);
-            } else if (CANCEL_DURATION_TIMER.equals(intent.getAction())) {
-                final String notify_tag = intent.getStringExtra(NOTIFY_TAG);
-                final boolean resume_music = intent.getBooleanExtra(RESUME_MUSIC, false);
-                stopAlert(notify_tag, resume_music);
-                stopVibrator(notify_tag);
-                cancelAlarm(notify_tag);
-                Log.d(TAG, "CANCEL_DURATION_TIMER, notify_tag = " + notify_tag);
-                NotificationManagerCompat.from(TimerService.this)
-                        .cancel(notify_tag, 0);
-            } else if (START_DURATION_TIMER.equals(intent.getAction())) {
-                final String notify_tag = String.valueOf(System.currentTimeMillis());
-                final long duration_millis = intent.getLongExtra(DURATION_SECONDS, 0) * 1000;
-                final String title = intent.getStringExtra(TITLE);
-                Log.d(TAG, "duration_millis = " + duration_millis + ", notify_tag = " + notify_tag + ", title = " + title);
-                final long when_to_stop = System.currentTimeMillis() + duration_millis;
-
-                final Intent stopIntent = new Intent(TimerService.this, TimerService.class);
-                stopIntent.setAction(CANCEL_DURATION_TIMER);
-                stopIntent.putExtra(NOTIFY_TAG, notify_tag);
-
-                final NotificationCompat.Builder builder = getNotificationBuilder()
-                        .setContentTitle(title)
-                        .setUsesChronometer(true)
-                        .setWhen(when_to_stop)
-                        .addAction(R.drawable.ic_baseline_timer_off_24, "Cancel", PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), stopIntent, 0));
-
-                final Intent finishIntent = new Intent(TimerService.this, TimerService.class);
-                finishIntent.setAction(FINISH_DURATION_TIMER);
-                finishIntent.putExtra(NOTIFY_TAG, notify_tag);
-                finishIntent.putExtra(TITLE, title);
-
-                final PendingIntent finishPendingIntent = PendingIntent.getService(TimerService.this, (int) SystemClock.uptimeMillis(), finishIntent, 0);
-                alarms.put(notify_tag, finishPendingIntent);
-                getAlarmManager().setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when_to_stop, finishPendingIntent);
-
-                NotificationManagerCompat.from(TimerService.this)
-                        .notify(notify_tag, 0, builder.build());
-            }
+            onHandleWork(intent);
         }
         return START_STICKY;
     }
@@ -232,4 +244,5 @@ public class TimerService extends Service {
     public void onDestroy() {
         super.onDestroy();
     }
+
 }
